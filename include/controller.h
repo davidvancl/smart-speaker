@@ -72,7 +72,6 @@ void setDim(uint8_t dim);
 
 void toggleBass();
 
-void startWifiSetup();
 
 void powerOff(const char* reason);
 

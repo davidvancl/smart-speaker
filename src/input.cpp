@@ -90,7 +90,7 @@ void begin() {
   encoder.setFilter(1023);
   encoder.clearCount();
   setup(encoderButton, Event::EncoderClick, Event::EncoderLong, Cfg::ENC_LONG_PRESS_MS);
-  setup(button1, Event::Button1, Event::Button1Hold, Cfg::BTN1_SETUP_HOLD_MS);
+  setup(button1, Event::Button1, Event::None, 0);
   setup(button2, Event::Button2, Event::None, 0);
   setup(button3, Event::Button3, Event::None, 0);
   calibrateTouch();

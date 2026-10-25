@@ -44,12 +44,18 @@ Updater stačí nahrát jednou, potom už jen `soundbar` (výchozí prostředí)
 ## První spuštění
 
 1. Po prvním nahrání startuje v režimu **Bluetooth** – v telefonu se připoj k **ESP32 Soundbar**.
-2. Na displeji domů → **Radio**: reproduktor se restartuje do WiFi režimu. Když nezná žádnou síť, spustí
-   přístupový bod **ESP32-Soundbar-Setup** (zobrazí se na displeji). Připoj se k němu telefonem, otevře se
-   stránka WiFiManageru (jinak `http://192.168.4.1`), vyber síť a zadej heslo. Po připojení se spustí rádio.
-3. Znovu spustit nastavení WiFi: na stránce *settings* drž **tlačítko 1** 5 s, nebo příkaz `{"cmd":"wifiSetup"}`.
+2. WiFi se nastavuje jen v **`include/secrets.h`** (v `.gitignore`), reproduktor nemá webovou stránku ani portál:
+   ```cpp
+   #define SECRET_SSID "moje-wifi"
+   #define SECRET_PASS "heslo"
+   #define SECRET_SSID_ALT "druha-wifi"
+   #define SECRET_PASS_ALT "heslo2"
+   ```
+   Druhá síť (`_ALT`) je volitelná. Nahraj `soundbar` přes USB.
+3. Na displeji domů → **Radio**: reproduktor se restartuje do WiFi režimu a připojí se.
 
-Údaje k WiFi ukládá WiFiManager do NVS. Updater (esp-ota-updater) je použije přes `WiFi.begin()`, protože nemá vlastní uložené sítě.
+Po prvním úspěšném připojení uloží esp-ota-updater sítě do EEPROM. Updater i buildy bez `secrets.h` (CI, OTA) je
+pak použijí. Změna sítě = upravit `secrets.h` a nahrát přes USB.
 
 ## Ovládání
 
@@ -59,7 +65,6 @@ Updater stačí nahrát jednou, potom už jen `soundbar` (výchozí prostředí)
 | enkodér – stisk | play / pauza |
 | enkodér – držet 2 s | vypnutí (deep sleep), probuzení stiskem enkodéru |
 | tlačítko 1 / 2 / 3 | předchozí / play-pauza / další (rádio = stanice, SD = soubor) |
-| tlačítko 1 – držet 5 s na stránce *settings* | nastavení WiFi |
 | dotykový šroub | podle nastavení: podsvícení (výchozí) / bass boost / play-pauza / nic |
 | displej | stránky home, player, list (stanice), files (SD), settings |
 
@@ -68,8 +73,9 @@ se reproduktor uspí, pod 10 % bliká na displeji varování a podsvícení se z
 
 ## Zvuk (DSP)
 
-Každý zdroj jde přes stejný řetězec: high-pass 65 Hz → low-shelf 120 Hz (bass 0–10 × 0,9 dB + loudness až
-+6 dB při nízké hlasitosti, max +12 dB) → hlasitost snížená o zesílení basů (headroom) → měkký limiter.
+Každý zdroj jde přes stejný řetězec: high-pass 70 Hz 4. řádu → low-shelf 150 Hz (bass 0–10 × 0,9 dB + loudness až
++6 dB při nízké hlasitosti, max +12 dB) → hlasitost snížená o zesílení basů (headroom) → peak limiter (`DSP_LIMITER_THRESHOLD` = úroveň, kde začíná
+ořezávat PAM8403).
 Nastavení (bass zap/vyp, úroveň, loudness) je v API. Konstanty jsou v `include/config.h` (`DSP_*`, `VOLUME_*`).
 
 ## Aktualizace firmwaru (OTA)
@@ -114,7 +120,7 @@ Aplikace používá API na portu 80 (spouští se po připojení k WiFi). mDNS: 
 | `station` | index | přehrát stanici |
 | `file` | cesta | přehrát soubor ze SD |
 | `settings` | objekt, viz níže | změnit nastavení (ukládá se do NVS) |
-| `restart`, `wifiSetup`, `ota` | – | systém |
+| `restart`, `ota` | – | systém |
 
 Nastavení: `bass` (bool), `bassLevel` (0–10), `loudness` (bool), `dim` (10–100), `autoDim` (bool), `led` (bool),
 `ledBrightness` (0–255), `ledColor` (`"#RRGGBB"`), `ledEffect` (`solid`/`breathe`/`rainbow`/`vu`/`wave`),

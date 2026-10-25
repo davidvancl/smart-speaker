@@ -26,14 +26,14 @@ void startBluetooth() {
   BtSink::begin(Settings::data().volume);
 }
 
-void startWifi(bool forcePortal) {
+void startWifi() {
   esp_bt_controller_mem_release(ESP_BT_MODE_BTDM);
   Serial.printf("[main] BT memory released, free heap %u\n", (unsigned)ESP.getFreeHeap());
   Stations::begin();
   SdCard::begin();
   AudioOut::begin();
   StreamPlayer::begin();
-  Network::begin(Settings::data().mode == Mode::Radio, forcePortal);
+  Network::begin();
   wifiMode = true;
 }
 
@@ -59,13 +59,8 @@ void setup() {
   Clock::begin();
   Leds::begin();
 
-  bool forcePortal = Settings::takeFlag("wifiSetup");
-  if (forcePortal && Settings::data().mode == Mode::Bluetooth) {
-    Settings::data().mode = Mode::Radio;
-    Settings::changed();
-  }
   if (Settings::data().mode == Mode::Bluetooth) startBluetooth();
-  else startWifi(forcePortal);
+  else startWifi();
 
   Controller::begin();
   delay(100);

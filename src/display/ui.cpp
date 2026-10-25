@@ -130,8 +130,6 @@ String ipText() {
   switch (Network::state()) {
     case Network::State::Connected:
       return "IP " + Network::ip() + "  " + String(Network::rssi()) + " dBm";
-    case Network::State::Portal:
-      return String(Text::WIFI_SETUP) + Cfg::SETUP_AP;
     case Network::State::Connecting:
       return Text::WIFI_CONNECTING;
     default:
@@ -145,7 +143,7 @@ void refreshSettings() {
   Nextion::setValue("h_dim.val", s.dim);
   Nextion::setValue("bt_led.val", s.led ? 1 : 0);
   Nextion::setValue("h_led.val", s.ledBrightness);
-  Nextion::setText("t_ip", st.message == Text::WIFI_SETUP_RESTART ? String(st.message) : ipText(), 40);
+  Nextion::setText("t_ip", ipText(), 40);
   Nextion::setText("t_ver", String("FW ") + FW_VERSION + "  Battery " + String(Power::voltage(), 2) + " V", 40);
 }
 

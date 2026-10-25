@@ -25,8 +25,8 @@ modules and the display layout. **The owner speaks Czech – answer in Czech**, 
 | `power.*` | battery curve + smoothing, deep sleep |
 | `sensors.*` | Adafruit BME280 + BH1750 library on `Wire` |
 | `clock.*`, `leds.*` (NeoPixelBus on I2S1), `stations.*`, `sd_card.*` | NTP/time, WS2812B effects + current cap, station list on LittleFS, SD access |
-| `net/network.*` | WiFiManager (captive portal, credentials in NVS) in its own task, mDNS, update check |
-| `net/api.*` | REST + WebSocket API for the app, SD upload (started once WiFi is connected, WiFiManager uses port 80 during setup) |
+| `net/network.*` | WiFi in its own task (networks from `secrets.h`, saved by esp-ota-updater), mDNS, update check |
+| `net/api.*` | REST + WebSocket API for the app, SD upload (started once WiFi is connected) |
 | `updater/main.cpp` | separate `updater` environment for the `factory` partition (see *Platform*) |
 - Pin every library to an exact version/tag in `platformio.ini`. Before adding a library, check that it supports the
   Arduino core in use (see *Platform* below) and an ESP32 **without PSRAM**.
@@ -227,7 +227,7 @@ NX4024K032 (Enhanced 3.2", 400×240, landscape), project built in Nextion Editor
 - Remember the last source, station/file and volume in NVS and resume on power-up.
 
 ### WiFi
-- No credentials in the code. First boot / unknown network → captive-portal setup AP ("ESP32-Soundbar-Setup"), show the AP name on the display (`g_now`).
+- No credentials in the code, only in the git-ignored `include/secrets.h`. No web page, no captive portal and no WiFi setup from the app (owner decision): WiFi is set only in `secrets.h`. The OTA library (esp-ota-updater) is not changed for this.
 - Re-run the setup from the settings page: hold Button 1 for 5 s while the settings page is open (show a confirmation on the display).
 - Show IP + RSSI in `t_ip`, firmware version + battery voltage in `t_ver`. mDNS `soundbar.local`.
 
@@ -249,7 +249,7 @@ Status: milestones 1–9 implemented in one go (firmware 0.1.0), not yet tested 
 2. **Bluetooth mode** polished: name "ESP32 Soundbar", auto-reconnect, metadata on display, AVRCP from buttons/encoder.
    Includes the **bass boost / loudness DSP chain** from *Audio chain* (shared by all sources later).
    Sync volume with the phone (AVRCP absolute volume) both ways; show "Bluetooth – waiting" / device name on the display; pairing always allowed.
-3. **WiFi + internet radio**: WiFi setup without hardcoded password (WiFiManager-style captive portal), station list (JSON on LittleFS, editable later from the app), list page, MP3/AAC streams – choose a decoder library that works **without PSRAM** on the chosen core.
+3. **WiFi + internet radio**: WiFi from `secrets.h`, station list (JSON on LittleFS, editable later from the app), list page, MP3/AAC streams – choose a decoder library that works **without PSRAM** on the chosen core.
 4. **microSD player**: card stays inside the case, FAT32; files page browser, play MP3 (FLAC optional if RAM allows).
 5. **Home screen data**: NTP clock + date (Europe/Prague, DST), BME280 every 30 s, BH1750 → automatic display `dim` and LED brightness.
 6. **Underglow LEDs** (WS2812B, GPIO14): on/off (`bt_led`), brightness (`h_led`), colour + effects from the app, optional music-reactive (VU), auto-dim with BH1750, limit brightness on low battery, all off in sleep. Keep total current modest (40 LEDs × 60 mA full white = 2.4 A – cap brightness so LEDs + amp stay within the 2.1 A boost).
@@ -263,6 +263,6 @@ Status: milestones 1–9 implemented in one go (firmware 0.1.0), not yet tested 
 - Firmware must not rely on a 5 V signal anywhere – all ESP32 inputs are 3.3 V.
 - Network API is the project's own REST + WebSocket (documented in README.md), not esp-device-control: that library
   owns the HTTP server on port 80, so the SD upload could not share it.
-- No web interface (owner decision). The only HTML page is the WiFiManager setup portal.
+- No web interface and no setup portal (owner decision). WiFi only from `secrets.h`.
 - Display texts are English (as in this brief); the fonts are ISO-8859-2, so Czech metadata is shown correctly.
 - OTA is checked only in Radio/SD mode (WiFi is off in Bluetooth mode). No firmware upload over the network (no free slot).

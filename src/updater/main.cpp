@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <NeoPixelBus.h>
 #include <OtaUpdater.h>
 #include <esp_ota_ops.h>
 
@@ -9,6 +10,17 @@ namespace {
 constexpr uint32_t RETRY_MS = 60000;
 
 HardwareSerial display(2);
+NeoPixelBus<NeoGrbFeature, NeoEsp32I2s1Ws2812xMethod> strip(Cfg::LED_COUNT, Pins::LEDS);
+
+void blink(void*) {
+  NeoGamma<NeoGammaTableMethod> gamma;
+  RgbColor busy = gamma.Correct(RgbColor(HtmlColor(Cfg::LED_BUSY_COLOR))).Dim(Cfg::LED_BUSY_BRIGHTNESS);
+  for (bool on = true;; on = !on) {
+    strip.ClearTo(on ? busy : RgbColor(0));
+    strip.Show();
+    vTaskDelay(pdMS_TO_TICKS(Cfg::LED_BUSY_BLINK_MS));
+  }
+}
 
 void nextion(const String& cmd) {
   display.print(cmd);
@@ -53,6 +65,8 @@ void setup() {
   digitalWrite(Pins::DAC_XSMT, LOW);
   Serial.begin(115200);
   delay(200);
+  strip.Begin();
+  xTaskCreate(blink, "leds", 2048, nullptr, 1, nullptr);
   display.begin(Cfg::NEXTION_BAUD, SERIAL_8N1, Pins::NX_RX, Pins::NX_TX);
   nextion("");
   nextion("sleep=0");

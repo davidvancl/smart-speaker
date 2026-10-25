@@ -4,9 +4,9 @@
 
 namespace Network {
 
-enum class State : uint8_t { Off, Connecting, Connected, Portal, Failed };
+enum class State : uint8_t { Off, Connecting, Connected, Failed };
 
-void begin(bool portalIfNeeded, bool forcePortal);
+void begin();
 
 State state();
 
@@ -18,7 +18,7 @@ int rssi();
 
 String ssid();
 
-bool portalActive();
+bool busy();
 
 void requestOta();
 

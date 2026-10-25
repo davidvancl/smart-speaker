@@ -2,10 +2,14 @@
 
 #include <ESPmDNS.h>
 #include <HTTPClient.h>
+#include <OtaUpdater.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
-#include <WiFiManager.h>
 #include <esp_ota_ops.h>
+
+#if __has_include("secrets.h")
+#include "secrets.h"
+#endif
 
 #include "clock.h"
 #include "command.h"
@@ -17,7 +21,7 @@ namespace {
 
 QueueHandle_t otaRequests = nullptr;
 volatile State current = State::Off;
-bool allowPortal = false;
+volatile bool checking = false;
 bool announced = false;
 uint32_t lastAttempt = 0;
 
@@ -35,27 +39,44 @@ bool isNewer(const String& remote, const char* local) {
   return false;
 }
 
-void checkUpdate() {
+bool startUpdate() {
   WiFiClientSecure client;
   client.setInsecure();
   HTTPClient http;
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   http.setTimeout(8000);
   String url = String("https://github.com/") + OTA_REPO + "/releases/latest/download/version.txt";
-  if (!http.begin(client, url)) return;
+  if (!http.begin(client, url)) return false;
   int code = http.GET();
   String remote = code == HTTP_CODE_OK ? http.getString() : String();
   http.end();
   remote.trim();
   Serial.printf("[ota] installed %s, latest %s (HTTP %d)\n", FW_VERSION, remote.length() ? remote.c_str() : "?", code);
-  if (!isNewer(remote, FW_VERSION)) return;
+  if (!isNewer(remote, FW_VERSION)) return false;
   const esp_partition_t* factory =
       esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, nullptr);
   if (!factory || esp_ota_set_boot_partition(factory) != ESP_OK) {
     Serial.println("[ota] updater partition not found - flash it once over USB (pio run -e updater -t upload)");
-    return;
+    return false;
   }
   Controller::post(Cmd::Restart, 0, 0, (String("Updating to ") + remote + "...").c_str());
+  return true;
+}
+
+void checkUpdate() {
+  checking = true;
+  checking = startUpdate();
+}
+
+bool connectWifi() {
+#if defined(SECRET_SSID_ALT)
+  static const OtaUpdater::WifiNetwork NETWORKS[] = {{SECRET_SSID, SECRET_PASS}, {SECRET_SSID_ALT, SECRET_PASS_ALT}};
+  return OtaUpdater::connectWifi(NETWORKS, 2, Cfg::WIFI_CONNECT_TIMEOUT_MS);
+#elif defined(SECRET_SSID)
+  return OtaUpdater::connectWifi(SECRET_SSID, SECRET_PASS, Cfg::WIFI_CONNECT_TIMEOUT_MS);
+#else
+  return OtaUpdater::connectWifi(nullptr, nullptr, Cfg::WIFI_CONNECT_TIMEOUT_MS);
+#endif
 }
 
 void announce() {
@@ -68,12 +89,6 @@ void announce() {
   Clock::startNtp();
 }
 
-void onPortal(WiFiManager*) {
-  current = State::Portal;
-  Serial.printf("[net] setup portal: join WiFi \"%s\", open http://%s\n", Cfg::SETUP_AP,
-                WiFi.softAPIP().toString().c_str());
-}
-
 void connected() {
   WiFi.setAutoReconnect(true);
   current = State::Connected;
@@ -83,26 +98,20 @@ void connected() {
   checkUpdate();
 }
 
-void connect(bool forcePortal) {
+void connect() {
   current = State::Connecting;
   lastAttempt = millis();
-  WiFiManager wm;
-  wm.setHostname(Cfg::HOSTNAME);
-  wm.setTitle(Cfg::DEVICE_NAME);
-  wm.setConnectTimeout(Cfg::WIFI_CONNECT_TIMEOUT_MS / 1000);
-  wm.setAPCallback(onPortal);
-  wm.setEnableConfigPortal(allowPortal || forcePortal);
-  bool ok = forcePortal ? wm.startConfigPortal(Cfg::SETUP_AP) : wm.autoConnect(Cfg::SETUP_AP);
-  if (ok) {
+  if (connectWifi()) {
     connected();
   } else {
-    Serial.println("[net] connection failed");
+    Serial.println("[net] connection failed - set the network in include/secrets.h");
     current = State::Failed;
   }
 }
 
-void task(void* arg) {
-  connect(arg != nullptr);
+void task(void*) {
+  WiFi.setHostname(Cfg::HOSTNAME);
+  connect();
   bool request;
   for (;;) {
     if (xQueueReceive(otaRequests, &request, pdMS_TO_TICKS(1000)) == pdTRUE) {
@@ -120,20 +129,17 @@ void task(void* arg) {
       announce();
     } else if (!up && millis() - lastAttempt > Cfg::WIFI_RETRY_MS) {
       Serial.println("[net] retrying WiFi");
-      lastAttempt = millis();
-      WiFi.begin();
-      current = State::Failed;
+      connect();
     }
   }
 }
 
 }
 
-void begin(bool portalIfNeeded, bool forcePortal) {
-  allowPortal = portalIfNeeded;
+void begin() {
   otaRequests = xQueueCreate(1, sizeof(bool));
   current = State::Connecting;
-  xTaskCreatePinnedToCore(task, "net", 10240, forcePortal ? reinterpret_cast<void*>(1) : nullptr, 1, nullptr, 0);
+  xTaskCreatePinnedToCore(task, "net", 10240, nullptr, 1, nullptr, 0);
 }
 
 State state() {
@@ -146,8 +152,6 @@ const char* stateName() {
       return "connecting";
     case State::Connected:
       return "connected";
-    case State::Portal:
-      return "portal";
     case State::Failed:
       return "failed";
     default:
@@ -156,9 +160,7 @@ const char* stateName() {
 }
 
 String ip() {
-  if (current == State::Portal) return WiFi.softAPIP().toString();
-  if (current == State::Connected) return WiFi.localIP().toString();
-  return String();
+  return current == State::Connected ? WiFi.localIP().toString() : String();
 }
 
 int rssi() {
@@ -169,8 +171,8 @@ String ssid() {
   return current == State::Connected ? WiFi.SSID() : String();
 }
 
-bool portalActive() {
-  return current == State::Portal;
+bool busy() {
+  return current == State::Connecting || checking;
 }
 
 void requestOta() {

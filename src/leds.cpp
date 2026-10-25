@@ -18,6 +18,7 @@ uint32_t color = 0;
 LedEffect effect = LedEffect::Solid;
 float ambient = 1.0f;
 bool lowBattery = false;
+bool busy = false;
 bool dark = true;
 float vu = 0;
 uint32_t frameAt = 0;
@@ -75,8 +76,8 @@ void render(uint32_t now) {
   }
 }
 
-void show() {
-  float level = brightness / 255.0f * ambient;
+void show(uint8_t bright) {
+  float level = bright / 255.0f * ambient;
   float current = 0;
   for (const RgbColor& p : frame) {
     current += (p.R + p.G + p.B) / 255.0f * level * Cfg::LED_MA_PER_CHANNEL + Cfg::LED_IDLE_MA;
@@ -112,6 +113,12 @@ void loop() {
   uint32_t now = millis();
   if (now - frameAt < Cfg::LED_FRAME_MS || !strip.CanShow()) return;
   frameAt = now;
+  if (busy) {
+    dark = false;
+    fill((now / Cfg::LED_BUSY_BLINK_MS) % 2 ? RgbColor(0) : unpack(Cfg::LED_BUSY_COLOR));
+    show(Cfg::LED_BUSY_BRIGHTNESS);
+    return;
+  }
   if (!enabled || brightness == 0) {
     if (!dark) {
       clear();
@@ -122,7 +129,7 @@ void loop() {
   }
   dark = false;
   render(now);
-  show();
+  show(brightness);
 }
 
 void configure(bool on, uint8_t level, uint32_t rgb, LedEffect fx) {
@@ -144,7 +151,12 @@ void setLowBattery(bool low) {
   lowBattery = low;
 }
 
+void setBusy(bool on) {
+  busy = on;
+}
+
 void off() {
+  busy = false;
   enabled = false;
   while (!strip.CanShow()) delay(1);
   clear();

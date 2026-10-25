@@ -71,7 +71,6 @@ bool execute(JsonObjectConst in) {
     return Controller::post(Cmd::Settings, 0, 0, text.c_str());
   }
   if (!strcmp(cmd, "restart")) return Controller::post(Cmd::Restart);
-  if (!strcmp(cmd, "wifiSetup")) return Controller::post(Cmd::WifiSetup);
   if (!strcmp(cmd, "ota")) return Controller::post(Cmd::Ota);
   return false;
 }

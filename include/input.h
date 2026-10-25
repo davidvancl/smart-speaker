@@ -9,7 +9,6 @@ enum class Event : uint8_t {
   EncoderClick,
   EncoderLong,
   Button1,
-  Button1Hold,
   Button2,
   Button3,
   Touch,

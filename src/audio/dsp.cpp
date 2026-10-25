@@ -6,15 +6,6 @@ namespace {
 
 constexpr float GAIN_SMOOTHING = 0.002f;
 
-inline float softClip(float x) {
-  constexpr float t = Cfg::DSP_LIMITER_THRESHOLD;
-  float a = fabsf(x);
-  if (a <= t) return x;
-  float over = (a - t) / (1.0f - t);
-  float y = t + (1.0f - t) * over / (1.0f + over);
-  return x < 0 ? -y : y;
-}
-
 inline int16_t toPcm(float x) {
   float s = x * 32767.0f;
   if (s > 32767.0f) return 32767;
@@ -85,9 +76,10 @@ void Dsp::apply() {
   float gainDb = min(volumeDb(p.volume), Cfg::VOLUME_MAX_DB - shelfDb * Cfg::DSP_HEADROOM_RATIO);
   shelfActive = shelfDb > 0.05f;
   for (int c = 0; c < 2; c++) {
-    highPass[c].begin(Cfg::DSP_HIGHPASS_HZ, rate);
+    for (auto& stage : highPass[c]) stage.begin(Cfg::DSP_HIGHPASS_HZ, rate);
     if (shelfActive) shelf[c].begin(Cfg::DSP_SHELF_HZ, rate, shelfDb);
   }
+  release = 1.0f - expf(-1000.0f / (Cfg::DSP_LIMITER_RELEASE_MS * rate));
   gainTarget = (p.muted || p.volume == 0) ? 0.0f : powf(10.0f, gainDb / 20.0f);
 }
 
@@ -120,15 +112,20 @@ size_t Dsp::write(const uint8_t* data, size_t len) {
       float r = channels == 2 ? in[1] / 32768.0f : l;
       in += channels;
 
-      l = highPass[0].process(l);
-      r = highPass[1].process(r);
+      for (auto& stage : highPass[0]) l = stage.process(l);
+      for (auto& stage : highPass[1]) r = stage.process(r);
       if (shelfActive) {
         l = shelf[0].process(l);
         r = shelf[1].process(r);
       }
       gain += (gainTarget - gain) * GAIN_SMOOTHING;
-      int16_t sl = toPcm(softClip(l * gain));
-      int16_t sr = toPcm(softClip(r * gain));
+      l *= gain;
+      r *= gain;
+      float level = max(fabsf(l), fabsf(r));
+      float ceiling = level > Cfg::DSP_LIMITER_THRESHOLD ? Cfg::DSP_LIMITER_THRESHOLD / level : 1.0f;
+      limit = min(limit + (1.0f - limit) * release, ceiling);
+      int16_t sl = toPcm(l * limit);
+      int16_t sr = toPcm(r * limit);
       block[i * 2] = sl;
       block[i * 2 + 1] = sr;
       uint16_t a = static_cast<uint16_t>(max(abs(sl), abs(sr)));

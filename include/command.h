@@ -16,7 +16,6 @@ enum class Cmd : uint8_t {
   File,
   Settings,
   Restart,
-  WifiSetup,
   Ota,
   StationsChanged,
   BtConnection,

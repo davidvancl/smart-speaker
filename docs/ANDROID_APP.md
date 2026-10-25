@@ -32,7 +32,7 @@ truth for the API; this document summarizes it. **The owner speaks Czech – ans
   status, greyed out.
 - Switching **to Bluetooth** from the app (`source` = `bluetooth`) restarts the speaker into Bluetooth mode, and it
   disappears from the network. Ask for confirmation first. Switching between `radio` and `sd` is instant.
-- `restart`, `wifiSetup` and a firmware update also drop the connection. Reconnect with backoff (1, 2, 5, 10 s…).
+- `restart` and a firmware update also drop the connection. Reconnect with backoff (1, 2, 5, 10 s…).
 - **No authentication**, plain `http://` and `ws://` in the LAN. Add a `network_security_config` that allows cleartext
   traffic (Android 9+ blocks it by default).
 - Volume is 0–21 (`volumeMax`). The display, the knob on the speaker and the phone (in Bluetooth mode) change it too,
@@ -45,6 +45,10 @@ truth for the API; this document summarizes it. **The owner speaks Czech – ans
 - Remember the last IP and try it first. Allow entering an IP manually (the speaker shows its IP on the *settings*
   page of its display).
 - One speaker is enough; no multi-device support needed.
+
+## WiFi
+The speaker's WiFi network is set only in the firmware (`secrets.h`), not from the app. There is no WiFi setup in the
+app and no web page on the speaker. `wifi.state` values: `connecting`, `connected`, `failed`, `off` (Bluetooth mode).
 
 ## API
 
@@ -75,7 +79,6 @@ modifying calls: `{"ok":true}`. Timeout 3 s for normal calls (uploads: no total 
 | `file` | string path, e.g. `"/Music/song.mp3"` | play file from the SD card |
 | `settings` | object, keys below | change settings (stored on the speaker); send only changed keys, serialized object max ~230 bytes |
 | `restart` | – | restart the speaker |
-| `wifiSetup` | – | speaker restarts into WiFi setup (access point `ESP32-Soundbar-Setup`, captive portal) |
 | `ota` | – | check GitHub for a newer firmware; if there is one the speaker installs it and restarts (~1 min) |
 
 ### Settings keys (`settings` object, also returned in `status.settings`)
@@ -112,7 +115,7 @@ modifying calls: `{"ok":true}`. Timeout 3 s for normal calls (uploads: no total 
   "wifi": {"state": "connected", "ssid": "Home", "ip": "192.168.1.23", "rssi": -61},
   "time": "14:05", "date": "Saturday 25.10.2026", "page": 1, "heap": 81234,
   "settings": {"bass": true, "bassLevel": 6, "loudness": true, "dim": 80, "autoDim": true, "led": true,
-               "ledBrightness": 96, "ledColor": "#FF6A00", "ledEffect": "breathe", "touchAction": "leds",
+               "ledBrightness": 96, "ledColor": "#FF0000", "ledEffect": "solid", "touchAction": "leds",
                "tempOffset": -2.0, "autoOff": 30}
 }
 ```
@@ -165,7 +168,7 @@ change. The station currently playing is `status.radio.station`.
    upload files from the phone into the current folder (multiple, with progress, cancel), used/total space.
 5. **Settings** – Sound (bass, bass level, loudness), Display (brightness, auto brightness), Lights (on/off,
    brightness, colour picker, effect), Touch button action, Temperature offset, Auto off, System (firmware version,
-   WiFi SSID/RSSI/IP, check for update, WiFi setup, restart – the last three with confirmation).
+   WiFi SSID/RSSI/IP read-only, check for update, restart – the last two with confirmation).
 
 Sliders: debounce sends (~100 ms), apply incoming status to every control except the one being dragged.
 

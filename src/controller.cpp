@@ -189,7 +189,7 @@ void startStation(int index) {
     radioPending = true;
     state.phase = StreamPhase::Idle;
     state.playing = false;
-    message(Network::portalActive() ? String(Text::WIFI_SETUP) + Cfg::SETUP_AP : String(Text::WIFI_CONNECTING));
+    message(Text::WIFI_CONNECTING);
     return;
   }
   radioPending = false;
@@ -314,9 +314,6 @@ void handle(const Command& c) {
     case Cmd::Restart:
       scheduleRestart(text.length() ? text : String("Restarting..."));
       break;
-    case Cmd::WifiSetup:
-      startWifiSetup();
-      break;
     case Cmd::Ota:
       Network::requestOta();
       break;
@@ -378,10 +375,6 @@ void handleInput() {
       Serial.println("[input] next");
       next();
       break;
-    case Input::Event::Button1Hold:
-      Serial.println("[input] button 1 held");
-      if (Ui::page() == Ui::SettingsPage) startWifiSetup();
-      break;
     case Input::Event::Touch:
       Serial.printf("[input] touch pad -> %s\n", Settings::touchName(cfg().touchAction));
       if (cfg().touchAction == TouchAction::Leds) setLed(!cfg().led);
@@ -399,12 +392,10 @@ void updateNetwork() {
   if (now == last) return;
   last = now;
   Serial.printf("[ctrl] network %s\n", Network::stateName());
-  if (now == Network::State::Portal) message(String(Text::WIFI_SETUP) + Cfg::SETUP_AP);
   if (now == Network::State::Failed && state.mode == Mode::Radio) message(Text::WIFI_FAILED);
   if (now == Network::State::Connected) {
     Api::begin();
-    if (state.message.startsWith(Text::WIFI_SETUP) || state.message == Text::WIFI_CONNECTING ||
-        state.message == Text::WIFI_FAILED) {
+    if (state.message == Text::WIFI_CONNECTING || state.message == Text::WIFI_FAILED) {
       state.message = "";
     }
     if (radioPending && state.mode == Mode::Radio) startStation(cfg().station);
@@ -596,6 +587,7 @@ void loop() {
 
   handleInput();
   updateNetwork();
+  Leds::setBusy(Network::busy());
   updatePower();
   updateAmbient();
 
@@ -821,15 +813,6 @@ void toggleBass() {
   Settings::changed();
   applyAudio();
   message(cfg().bass ? "Bass boost on" : "Bass boost off", 2000);
-}
-
-void startWifiSetup() {
-  Serial.println("[ctrl] WiFi setup requested");
-  Settings::setFlag("wifiSetup");
-  if (cfg().mode == Mode::Bluetooth) cfg().mode = Mode::Radio;
-  Settings::changed();
-  Settings::saveNow();
-  scheduleRestart(Text::WIFI_SETUP_RESTART);
 }
 
 void powerOff(const char* reason) {

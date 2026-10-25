@@ -16,6 +16,8 @@ void setAmbient(float factor);
 
 void setLowBattery(bool low);
 
+void setBusy(bool on);
+
 void off();
 
 }

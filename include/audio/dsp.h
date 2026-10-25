@@ -36,11 +36,13 @@ class Dsp : public audio_tools::AudioOutput {
   uint32_t rate = 44100;
   uint8_t channels = 2;
   bool supported = true;
-  audio_tools::HighPassFilter<float> highPass[2];
+  audio_tools::HighPassFilter<float> highPass[2][2];
   audio_tools::LowShelfFilter<float> shelf[2];
   bool shelfActive = false;
   float gain = 0;
   float gainTarget = 0;
+  float limit = 1.0f;
+  float release = 0;
   std::atomic<uint16_t> peak{0};
   int16_t block[BLOCK_FRAMES * 2];
 

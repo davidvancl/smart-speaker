@@ -29,7 +29,6 @@ constexpr int BATTERY = 36;
 namespace Cfg {
 constexpr const char* DEVICE_NAME = "ESP32 Soundbar";
 constexpr const char* HOSTNAME = "soundbar";
-constexpr const char* SETUP_AP = "ESP32-Soundbar-Setup";
 constexpr const char* TIMEZONE = "CET-1CEST,M3.5.0,M10.5.0/3";
 constexpr const char* NTP_SERVER_1 = "pool.ntp.org";
 constexpr const char* NTP_SERVER_2 = "time.google.com";
@@ -40,17 +39,18 @@ constexpr uint32_t UI_REFRESH_MS = 100;
 
 constexpr uint8_t VOLUME_MAX = 21;
 constexpr uint8_t VOLUME_DEFAULT = 8;
-constexpr float VOLUME_MIN_DB = -45.0f;
+constexpr float VOLUME_MIN_DB = -51.0f;
 constexpr float VOLUME_MAX_DB = 0.0f;
 
-constexpr float DSP_HIGHPASS_HZ = 65.0f;
-constexpr float DSP_SHELF_HZ = 120.0f;
+constexpr float DSP_HIGHPASS_HZ = 70.0f;
+constexpr float DSP_SHELF_HZ = 150.0f;
 constexpr float DSP_BASS_DB_PER_LEVEL = 0.9f;
 constexpr uint8_t DSP_BASS_LEVEL_MAX = 10;
 constexpr float DSP_LOUDNESS_MAX_DB = 6.0f;
 constexpr float DSP_SHELF_MAX_DB = 12.0f;
 constexpr float DSP_HEADROOM_RATIO = 1.0f;
-constexpr float DSP_LIMITER_THRESHOLD = 0.85f;
+constexpr float DSP_LIMITER_THRESHOLD = 0.6f;
+constexpr float DSP_LIMITER_RELEASE_MS = 150.0f;
 
 constexpr int I2S_DMA_COUNT = 8;
 constexpr int I2S_DMA_SIZE = 512;
@@ -72,7 +72,6 @@ constexpr size_t SD_MAX_ENTRIES = 300;
 constexpr int ENC_STEPS_PER_DETENT = 4;
 constexpr uint32_t BUTTON_DEBOUNCE_MS = 30;
 constexpr uint32_t ENC_LONG_PRESS_MS = 2000;
-constexpr uint32_t BTN1_SETUP_HOLD_MS = 5000;
 constexpr uint32_t TOUCH_SAMPLE_MS = 20;
 constexpr uint8_t TOUCH_CONFIRM_SAMPLES = 3;
 constexpr float TOUCH_ON_RATIO = 0.75f;
@@ -100,6 +99,9 @@ constexpr float LED_MA_PER_CHANNEL = 20.0f;
 constexpr float LED_IDLE_MA = 1.0f;
 constexpr float LED_BUDGET_MA = 700.0f;
 constexpr float LED_BUDGET_LOW_BATTERY_MA = 200.0f;
+constexpr uint32_t LED_BUSY_COLOR = 0xFF6A00;
+constexpr uint8_t LED_BUSY_BRIGHTNESS = 96;
+constexpr uint32_t LED_BUSY_BLINK_MS = 500;
 
 constexpr uint32_t SETTINGS_SAVE_DELAY_MS = 3000;
 constexpr uint32_t STATUS_REFRESH_MS = 2000;

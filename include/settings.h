@@ -18,8 +18,8 @@ struct SettingsData {
   bool autoDim = true;
   bool led = true;
   uint8_t ledBrightness = 96;
-  uint32_t ledColor = 0xFF6A00;
-  LedEffect ledEffect = LedEffect::Breathe;
+  uint32_t ledColor = 0xFF0000;
+  LedEffect ledEffect = LedEffect::Solid;
   TouchAction touchAction = TouchAction::Leds;
   int16_t station = 0;
   String file;
@@ -41,10 +41,6 @@ void saveNow();
 void loop();
 
 uint32_t revision();
-
-bool takeFlag(const char* key);
-
-void setFlag(const char* key);
 
 const char* modeName(Mode mode);
 bool parseMode(const char* text, Mode& out);

@@ -7,6 +7,7 @@ namespace Settings {
 namespace {
 
 constexpr const char* NAMESPACE = "soundbar";
+constexpr uint8_t LED_DEFAULTS_REV = 1;
 constexpr const char* MODE_NAMES[] = {"bluetooth", "radio", "sd"};
 constexpr const char* EFFECT_NAMES[] = {"solid", "breathe", "rainbow", "vu", "wave"};
 constexpr const char* TOUCH_NAMES[] = {"leds", "bass", "play", "none"};
@@ -62,8 +63,14 @@ void begin() {
   current.filePos = p.getULong("filePos", d.filePos);
   current.tempOffset = p.getFloat("tempOffset", d.tempOffset);
   current.autoOff = p.getUShort("autoOff", d.autoOff);
+  bool resetLeds = p.getUChar("ledRev", 0) < LED_DEFAULTS_REV;
   p.end();
   sanitize(current);
+  if (resetLeds) {
+    current.ledColor = d.ledColor;
+    current.ledEffect = d.ledEffect;
+    saveNow();
+  }
   Serial.printf("[settings] mode %s, volume %u, bass %s/%u, led %s/%u, station %d, file %s\n",
                 modeName(current.mode), current.volume, current.bass ? "on" : "off", current.bassLevel,
                 current.led ? "on" : "off", current.ledBrightness, current.station, current.file.c_str());
@@ -101,6 +108,7 @@ void saveNow() {
   p.putULong("filePos", current.filePos);
   p.putFloat("tempOffset", current.tempOffset);
   p.putUShort("autoOff", current.autoOff);
+  p.putUChar("ledRev", LED_DEFAULTS_REV);
   p.end();
   Serial.println("[settings] saved");
 }
@@ -111,22 +119,6 @@ void loop() {
 
 uint32_t revision() {
   return rev;
-}
-
-bool takeFlag(const char* key) {
-  Preferences p;
-  p.begin(NAMESPACE, false);
-  bool set = p.getBool(key, false);
-  if (set) p.remove(key);
-  p.end();
-  return set;
-}
-
-void setFlag(const char* key) {
-  Preferences p;
-  p.begin(NAMESPACE, false);
-  p.putBool(key, true);
-  p.end();
 }
 
 const char* modeName(Mode mode) {
