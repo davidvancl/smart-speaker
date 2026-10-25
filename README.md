@@ -1,36 +1,114 @@
-# ESP32 Soundbar – firmware
+# smart-speaker
 
-Firmware pro DIY bateriový stereo reproduktor: Bluetooth reproduktor, internetové rádio, přehrávač z microSD,
-Nextion displej, hodiny + počasí, podsvícení WS2812B a REST/WebSocket API pro aplikaci.
+Firmware for a DIY battery-powered stereo speaker ("ESP32 Soundbar"), running on an ESP32. It works as a Bluetooth speaker, an internet radio and a player for a microSD card. It also has a Nextion touch display with a clock and weather, WS2812B underglow LEDs and a REST/WebSocket API for an Android app. The firmware updates itself from GitHub Releases.
 
-Piny, moduly a rozložení displeje jsou v [docs/CLAUDE.md](docs/CLAUDE.md), zadání Android aplikace v [docs/ANDROID_APP.md](docs/ANDROID_APP.md). Projekt displeje je v [display-preset](display-preset).
+A printable user manual in Czech is in [docs/manual.pdf](docs/manual.pdf). Its source is [docs/manual.html](docs/manual.html).
 
-## Režimy
+Pins, modules and the display layout in detail are in [docs/CLAUDE.md](docs/CLAUDE.md). The brief for the Android app is in [docs/ANDROID_APP.md](docs/ANDROID_APP.md), the Nextion Editor project is in [display-preset](display-preset).
 
-| Režim | Co běží | Přepnutí |
+## Hardware
+
+- ESP32 DevKitC (ESP32-WROOM-32D, 4 MB flash, no PSRAM, `esp32dev`)
+- PCM5102 I2S DAC → passive divider 22k/4.7k → PAM8403 amplifier (2× 3 W) → 2× Roadstar VO-401 4" speakers in closed boxes (~0.9 l each)
+- Nextion NX4024K032 3.2" touch display (400×240)
+- KY-040 rotary encoder with a push button, 3 push buttons, a capacitive touch pad (M3 screw on the top)
+- ≈40 WS2812B LEDs as underglow below the case
+- BME280 (temperature, humidity, pressure) and BH1750 (ambient light) on I2C
+- LaskaKit μŠup microSD module
+- 1S2P Li-ion 6400 mAh, IP5306 charger/boost module (5 V 2.1 A, USB-C), rocker switch
+
+Wiring:
+
+| Signal | GPIO |
+|---|---|
+| Nextion RX / TX | 16 / 17 |
+| I2S BCK / LRCK / DATA (PCM5102) | 26 / 25 / 27 |
+| PCM5102 XSMT (soft mute) | 2 |
+| I2C SDA / SCL | 21 / 22 |
+| microSD SCK / MISO / MOSI / CS | 18 / 19 / 23 / 5 |
+| Encoder CLK / DT / SW | 32 / 33 / 13 |
+| Button 1 / 2 / 3 | 39 / 34 / 35 |
+| Touch pad | 4 |
+| LED strip DIN | 14 |
+| Battery voltage (divider 100k/100k) | 36 |
+
+All pins and constants are in [include/config.h](include/config.h).
+
+## Modes
+
+| Mode | What runs | Switching |
 |---|---|---|
-| **Bluetooth** | A2DP sink „ESP32 Soundbar“, AVRCP, metadata, synchronizace hlasitosti s telefonem | domů → *Bluetooth* |
-| **Rádio** | WiFi, stanice z `/stations.json` (LittleFS), MP3/AAC streamy, ICY metadata | domů → *Radio* |
-| **SD karta** | MP3 / AAC (ADTS) / WAV z karty, ID3 tagy, procházení složek | domů → *SD card* |
+| **Bluetooth** | A2DP sink "ESP32 Soundbar", AVRCP, metadata, volume synced with the phone | home → *Bluetooth* |
+| **Radio** | WiFi, stations from `/stations.json` (LittleFS), MP3/AAC streams, ICY metadata | home → *Radio* |
+| **SD card** | MP3 / AAC (ADTS) / WAV from the card, ID3 tags, folder browser | home → *SD card* |
 
-Bluetooth a WiFi se do RAM nevejdou zároveň (ESP32 bez PSRAM), proto přepnutí mezi Bluetooth a Rádiem/SD uloží
-režim do NVS a restartuje. Rádio ↔ SD se přepíná bez restartu. Po zapnutí se obnoví poslední režim, stanice,
-soubor (i pozice v něm) a hlasitost.
+Bluetooth and WiFi do not fit into the RAM together (ESP32 without PSRAM), so switching between Bluetooth and Radio/SD saves the mode to NVS and restarts. Radio ↔ SD switches without a restart. After power-on the last mode, station, file (including the position in it) and volume are restored.
 
-## Nahrání
+## Controls
 
-Flash je rozdělený takto (`partitions.csv`):
+| Input | Action |
+|---|---|
+| Encoder – turn | volume 0–21 |
+| Encoder – press | play / pause |
+| Encoder – hold 2 s | power off (deep sleep), wake up by pressing the encoder |
+| Button 1 / 2 / 3 | previous / play-pause / next (radio = station, SD = file) |
+| Touch pad | as set: LEDs on/off (default) / bass boost / play-pause / nothing |
+| Display | pages home, player, list (stations), files (SD), settings |
 
-| Oddíl | Velikost | Obsah |
+The speaker turns itself off after 30 min without playback and without any input (configurable, 0 = never). Below ~3.3 V of the battery it goes to deep sleep, below 10 % a warning is shown on the display.
+
+## LEDs
+
+| State | LEDs |
+|---|---|
+| Startup | red → green → blue test, then off |
+| WiFi connection and update check (also in the updater) | blinking orange |
+| Normal operation | solid red (default), colour, effect and brightness can be changed in the app |
+| Battery below 20 % | brightness limited |
+| Powered off | off |
+
+Effects: `solid`, `breathe`, `rainbow`, `vu` (reacts to the music), `wave`. The brightness follows the ambient light sensor when auto-dim is on, and the total current is capped (`LED_BUDGET_MA`).
+
+## Sound (DSP)
+
+Every source goes through the same chain in [src/audio/dsp.cpp](src/audio/dsp.cpp):
+
+1. 4th-order high-pass at 70 Hz – the closed boxes cannot play lower, it only wastes amplifier power.
+2. Low-shelf at 150 Hz – bass level 0–10 × 0.9 dB, plus loudness up to +6 dB at low volume, max +12 dB.
+3. Volume, lowered by the bass boost (headroom).
+4. Peak limiter at `DSP_LIMITER_THRESHOLD` = the level where the PAM8403 starts clipping.
+
+Volume is linear in dB from `VOLUME_MIN_DB` (−51 dB, step 1) to 0 dB (step 21), step 0 is mute. Bass on/off, bass level and loudness are in the settings (display, API). The constants are `DSP_*` and `VOLUME_*` in [include/config.h](include/config.h).
+
+## WiFi
+
+Copy [include/secrets.example.h](include/secrets.example.h) to `include/secrets.h` (it is in `.gitignore`) and fill it in. Up to 4 networks are supported, remove the ones you don't need:
+
+```cpp
+#define SECRET_SSID "wifi-name"
+#define SECRET_PASS "wifi-password"
+
+#define SECRET_SSID_2 "second-wifi-name"
+#define SECRET_PASS_2 "second-wifi-password"
+```
+
+There is no web page and no setup portal, WiFi is set only here. The networks visible in a scan are tried first, in this order. On the first successful connection the networks are saved to EEPROM. The updater and firmware built by GitHub Actions have no `secrets.h` and use the saved networks. To change them, edit `secrets.h` and upload the firmware over USB again.
+
+## Build and upload
+
+Requires [PlatformIO](https://platformio.org/) (CLI or the VS Code extension).
+
+The flash is split like this ([partitions.csv](partitions.csv)):
+
+| Partition | Size | Content |
 |---|---|---|
-| `factory` | 1,1 MB | **updater** – malý firmware, který jen stáhne novou verzi z GitHubu |
-| `app0` | 2,75 MB | **soundbar** – hlavní firmware |
-| `spiffs` | 64 kB | LittleFS se seznamem stanic |
+| `factory` | 1.1 MB | **updater** – a small firmware that only downloads the new version from GitHub |
+| `app0` | 2.75 MB | **soundbar** – the main firmware |
+| `spiffs` | 64 kB | LittleFS with the station list |
 
-Hlavní firmware má ~2,4 MB (Bluetooth + WiFi + TLS + dekodéry), takže se nevejde do dvou OTA slotů po 1,9 MB.
-Proto je OTA řešené updaterem v oddílu `factory`.
+The main firmware is ~2.4 MB (Bluetooth + WiFi + TLS + decoders), so it does not fit into two OTA slots. The OTA update is therefore done by the updater in the `factory` partition.
 
-Poprvé přes USB (pořadí je důležité):
+First upload over USB (the order matters):
 
 ```
 pio run -e updater -t upload
@@ -38,114 +116,96 @@ pio run -e soundbar -t upload
 pio device monitor
 ```
 
-Ve VS Code: PlatformIO → *Project Tasks* → `updater` → *Upload*, potom `soundbar` → *Upload* a *Monitor*.
-Updater stačí nahrát jednou, potom už jen `soundbar` (výchozí prostředí).
+The updater is uploaded only once, after that only `soundbar` (the default environment). On the first start the speaker is in Bluetooth mode – connect to **ESP32 Soundbar** from the phone.
 
-## První spuštění
+## Source layout
 
-1. Po prvním nahrání startuje v režimu **Bluetooth** – v telefonu se připoj k **ESP32 Soundbar**.
-2. WiFi se nastavuje jen v **`include/secrets.h`** (v `.gitignore`), reproduktor nemá webovou stránku ani portál:
-   ```cpp
-   #define SECRET_SSID "moje-wifi"
-   #define SECRET_PASS "heslo"
-   #define SECRET_SSID_ALT "druha-wifi"
-   #define SECRET_PASS_ALT "heslo2"
-   ```
-   Druhá síť (`_ALT`) je volitelná. Nahraj `soundbar` přes USB.
-3. Na displeji domů → **Radio**: reproduktor se restartuje do WiFi režimu a připojí se.
+- `src/main.cpp` – `setup()` and `loop()` only
+- `src/controller.cpp` – central state, modes, playback commands, settings, status JSON, power off
+- `src/settings.cpp` – settings in NVS
+- `src/audio/` – DSP (`dsp.cpp`), I2S output and mute (`output.cpp`), Bluetooth sink (`bt_sink.cpp`), radio and SD player task (`stream_player.cpp`)
+- `src/display/` – Nextion protocol (`nextion.cpp`), UTF-8 → ISO-8859-2 (`latin2.cpp`), pages and touch IDs (`ui.cpp`)
+- `src/input.cpp` – encoder, buttons, touch pad
+- `src/leds.cpp` – WS2812B effects, status blinking, current cap
+- `src/power.cpp`, `src/sensors.cpp`, `src/clock.cpp` – battery and deep sleep, BME280 + BH1750, NTP time
+- `src/stations.cpp`, `src/sd_card.cpp` – station list on LittleFS, SD card access
+- `src/net/network.cpp` – WiFi task, mDNS, update check
+- `src/net/api.cpp` – REST + WebSocket API
+- `src/updater/main.cpp` – the updater (`updater` environment)
+- `include/config.h` – pins and constants, `include/texts.h` – display texts
+- `include/WifiCredentials.h` – uses `secrets.h` if it exists
 
-Po prvním úspěšném připojení uloží esp-ota-updater sítě do EEPROM. Updater i buildy bez `secrets.h` (CI, OTA) je
-pak použijí. Změna sítě = upravit `secrets.h` a nahrát přes USB.
+## Firmware update (OTA)
 
-## Ovládání
+Uses the [esp-ota-updater](https://github.com/davidvancl/esp-ota-updater) library. In Radio or SD mode the speaker checks the latest release after connecting to WiFi. When it is newer, it restarts into the updater, which downloads the firmware, writes it to `app0` and boots it. The check can also be started with the `ota` command. In Bluetooth mode WiFi is off and no check runs.
 
-| Vstup | Akce |
-|---|---|
-| enkodér – otáčení | hlasitost 0–21 |
-| enkodér – stisk | play / pauza |
-| enkodér – držet 2 s | vypnutí (deep sleep), probuzení stiskem enkodéru |
-| tlačítko 1 / 2 / 3 | předchozí / play-pauza / další (rádio = stanice, SD = soubor) |
-| dotykový šroub | podle nastavení: podsvícení (výchozí) / bass boost / play-pauza / nic |
-| displej | stránky home, player, list (stanice), files (SD), settings |
+Releasing a new version:
+1. Increase `custom_version` in `platformio.ini`.
+2. Commit and push to `main`.
+3. GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) publish a release with `firmware.bin` and `version.txt`. The speaker updates on its next connection in Radio/SD mode.
 
-Automatické vypnutí po 30 min bez přehrávání a bez ovládání (nastavitelné, 0 = nikdy). Pod ~3,3 V baterie
-se reproduktor uspí, pod 10 % bliká na displeji varování a podsvícení se ztlumí.
-
-## Zvuk (DSP)
-
-Každý zdroj jde přes stejný řetězec: high-pass 70 Hz 4. řádu → low-shelf 150 Hz (bass 0–10 × 0,9 dB + loudness až
-+6 dB při nízké hlasitosti, max +12 dB) → hlasitost snížená o zesílení basů (headroom) → peak limiter (`DSP_LIMITER_THRESHOLD` = úroveň, kde začíná
-ořezávat PAM8403).
-Nastavení (bass zap/vyp, úroveň, loudness) je v API. Konstanty jsou v `include/config.h` (`DSP_*`, `VOLUME_*`).
-
-## Aktualizace firmwaru (OTA)
-
-1. Zvyš `custom_version` v `platformio.ini`, commit a push do `main`.
-2. GitHub Actions (`.github/workflows/release.yml`) sestaví `soundbar` a vydá release s `firmware.bin` a `version.txt`.
-3. Reproduktor v režimu Rádio/SD po připojení k WiFi zkontroluje verzi. Když je novější, restartuje do updateru,
-   ten firmware stáhne, zapíše do `app0` a nabootuje ho. Ručně příkazem `{"cmd":"ota"}`.
-
-V režimu Bluetooth je WiFi vypnutá, aktualizace se tam nekontroluje. Repozitář `davidvancl/smart-speaker`
-(`custom_ota_repo`) musí existovat a mít povolené Actions.
+Do not push a locally changed version in `platformio.ini` unless you want to publish a release.
 
 ## API
 
-Aplikace používá API na portu 80 (spouští se po připojení k WiFi). mDNS: `soundbar.local`, služba `_http._tcp`.
+The Android app uses the API on port 80, started once WiFi is connected (Radio and SD mode only). mDNS: `soundbar.local`, service `_http._tcp`. No authentication.
 
 ### REST
 
-| Metoda | Cesta | Tělo / parametry | Popis |
+| Method | Path | Body / parameters | |
 |---|---|---|---|
-| GET | `/api/status` | – | kompletní stav (viz níže) |
-| POST | `/api/cmd` | `{"cmd":"…","value":…}` | příkaz (tabulka níže) |
+| GET | `/api/status` | – | complete state (see below) |
+| POST | `/api/cmd` | `{"cmd":"…","value":…}` | command (table below) |
 | GET | `/api/stations` | – | `[{"name","url"}]` |
-| POST | `/api/stations` | `{"name","url"}` | přidat stanici |
-| PUT | `/api/stations` | `[{"name","url"}]` | nahradit celý seznam |
-| POST | `/api/stations/edit` | `{"index","name","url"}` | upravit stanici |
-| POST | `/api/stations/move` | `{"from","to"}` | přesunout stanici |
-| DELETE | `/api/stations?index=n` | – | smazat stanici |
-| GET | `/api/files?path=/` | – | obsah složky na SD `{path,total,used,entries:[{name,dir,size,audio}]}` |
-| DELETE | `/api/files?path=…` | – | smazat soubor / složku |
-| POST | `/api/mkdir?path=…` | – | vytvořit složku |
-| POST | `/api/upload?path=/slozka` | multipart, pole `file` | nahrát soubor na SD |
+| POST | `/api/stations` | `{"name","url"}` | add a station |
+| PUT | `/api/stations` | `[{"name","url"}]` | replace the whole list |
+| POST | `/api/stations/edit` | `{"index","name","url"}` | edit a station |
+| POST | `/api/stations/move` | `{"from","to"}` | move a station |
+| DELETE | `/api/stations?index=n` | – | delete a station |
+| GET | `/api/files?path=/` | – | SD folder `{path,total,used,entries:[{name,dir,size,audio}]}` |
+| DELETE | `/api/files?path=…` | – | delete a file / folder |
+| POST | `/api/mkdir?path=…` | – | create a folder |
+| POST | `/api/upload?path=/folder` | multipart, field `file` | upload a file to the SD card |
 
-### Příkazy (`/api/cmd` i WebSocket)
+### Commands (`/api/cmd` and WebSocket)
 
 | `cmd` | `value` | |
 |---|---|---|
-| `toggle`, `play`, `pause`, `next`, `prev`, `mute` | – | přehrávání |
-| `volume` | 0–21 | hlasitost |
-| `volumeUp`, `volumeDown` | – | hlasitost ±1 |
-| `source` | `bluetooth` / `radio` / `sd` | zdroj (BT ↔ WiFi = restart) |
-| `station` | index | přehrát stanici |
-| `file` | cesta | přehrát soubor ze SD |
-| `settings` | objekt, viz níže | změnit nastavení (ukládá se do NVS) |
-| `restart`, `ota` | – | systém |
+| `toggle`, `play`, `pause`, `next`, `prev`, `mute` | – | playback |
+| `volume` | 0–21 | volume |
+| `volumeUp`, `volumeDown` | – | volume ±1 |
+| `source` | `bluetooth` / `radio` / `sd` | source (Bluetooth ↔ WiFi = restart) |
+| `station` | index | play a station |
+| `file` | path | play a file from the SD card |
+| `settings` | object, see below | change settings (saved to NVS) |
+| `restart`, `ota` | – | system |
 
-Nastavení: `bass` (bool), `bassLevel` (0–10), `loudness` (bool), `dim` (10–100), `autoDim` (bool), `led` (bool),
-`ledBrightness` (0–255), `ledColor` (`"#RRGGBB"`), `ledEffect` (`solid`/`breathe`/`rainbow`/`vu`/`wave`),
-`touchAction` (`leds`/`bass`/`play`/`none`), `tempOffset` (°C, −10…10), `autoOff` (minuty, 0 = nikdy),
-`volume`, `muted`.
+Settings: `bass` (bool), `bassLevel` (0–10), `loudness` (bool), `dim` (10–100), `autoDim` (bool), `led` (bool), `ledBrightness` (0–255), `ledColor` (`"#RRGGBB"`), `ledEffect` (`solid`/`breathe`/`rainbow`/`vu`/`wave`), `touchAction` (`leds`/`bass`/`play`/`none`), `tempOffset` (°C, −10…10), `autoOff` (minutes, 0 = never), `volume`, `muted`.
 
 ### WebSocket `ws://soundbar.local/ws`
 
-- Po připojení a při každé změně: `{"t":"status","status":{…}}` – stejný objekt jako `/api/status`.
-- Každý dotyk na displeji: `{"t":"touch","page":1,"id":10}`.
-- Klient posílá stejné příkazy jako `/api/cmd`, odpověď `{"t":"ack"}` nebo `{"t":"err","error":"…"}`.
+- After connecting and on every change: `{"t":"status","status":{…}}` – the same object as `/api/status`.
+- Every touch on the display: `{"t":"touch","page":1,"id":10}`.
+- The client sends the same commands as to `/api/cmd`, the reply is `{"t":"ack"}` or `{"t":"err","error":"…"}`.
 
-Stav obsahuje: `fw`, `mode`, `source`, `playing`, `muted`, `volume`, `volumeMax`, `title`, `artist`, `album`,
-`info`, `message`, `bluetooth{connected,device}`, `radio{station,name,count,bitrate}`, `sd{ready,file,index,count}`,
-`battery{voltage,percent,low}`, `climate{temperature,humidity,pressure}`, `lux`, `wifi{state,ssid,ip,rssi}`,
-`time`, `date`, `page` (aktuální stránka displeje), `heap`, `settings{…}`.
+The status contains `fw`, `mode`, `source`, `playing`, `muted`, `volume`, `volumeMax`, `title`, `artist`, `album`, `info`, `message`, `bluetooth{connected,device}`, `radio{station,name,count,bitrate}`, `sd{ready,file,index,count}`, `battery{voltage,percent,low}`, `climate{temperature,humidity,pressure}`, `lux`, `wifi{state,ssid,ip,rssi}`, `time`, `date`, `page` (the open display page), `heap` and `settings{…}`.
 
-## Ladění
+## Troubleshooting
 
-Každý modul loguje do Serial Monitoru s prefixem (`[bt]`, `[stream]`, `[nx]`, `[sd]`, `[sensors]`, `[net]`, …).
+Every module logs to the serial monitor (115200 baud) with a prefix (`[bt]`, `[stream]`, `[nx]`, `[sd]`, `[sensors]`, `[net]`, …).
 
-- **Ticho:** SCK na PCM → GND, propojky H1/H2/H4 na L, XSMT na G2. Log `[audio]` ukazuje hlasitost a zesílení v dB.
-- **Dotyk na displeji dělá něco jiného:** log `[nx] touch page X id Y` – čísla jsou v `src/display/ui.cpp` (`namespace Id`).
-- **Enkodér jde obráceně / po dvou krocích:** `ENC_STEPS_PER_DETENT` v `include/config.h` nebo prohoď piny v `encoder.attachFullQuad()` v `src/input.cpp`.
-- **LED mají špatné barvy:** při startu blikne červená → zelená → modrá; jinak změň `NeoGrbFeature` v `src/leds.cpp`.
-- **Dotykový šroub nereaguje / spíná sám:** log `[input] touch … baseline …`, prahy `TOUCH_*` v `include/config.h`.
-- **SD karta:** FAT32; log `[sd]` vypíše kořen karty. Když se nikdy neinicializuje: EN modulu → 3V3.
-- **Rádio se zasekává:** `[stream] buffer underrun` – zvětši `STREAM_BUFFER_BYTES`; volná paměť je v logu `[main]`/`[power]`.
+| Problem | What to check |
+|---|---|
+| No sound | SCK of the PCM5102 to GND, jumpers H1/H2/H4 to L, XSMT on G2. The `[audio]` log shows the volume and gain in dB. |
+| A touch on the display does something else | log `[nx] touch page X id Y`, the IDs are in `src/display/ui.cpp` (`namespace Id`) |
+| Encoder turns the wrong way / two steps per click | `ENC_STEPS_PER_DETENT` in `include/config.h`, or swap the pins in `encoder.attachFullQuad()` in `src/input.cpp` |
+| Wrong LED colours | the startup test should be red → green → blue, otherwise change `NeoGrbFeature` in `src/leds.cpp` |
+| Touch pad does not react / triggers by itself | log `[input] touch … baseline …`, thresholds `TOUCH_*` in `include/config.h` |
+| SD card | FAT32, the `[sd]` log lists the root. If it never initialises: EN of the module → 3V3 |
+| Radio stutters | `[stream] buffer underrun` – increase `STREAM_BUFFER_BYTES`, free memory is in the `[main]` / `[power]` log |
+| Distortion at high volume | lower `DSP_LIMITER_THRESHOLD` (e.g. 0.5) |
+| No WiFi | `[net] connection failed` – check `include/secrets.h` and upload over USB |
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>ESP32 Soundbar – návod</title>
+<style>
+  @page { size: 148mm 210mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #fff; }
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1d1d24;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page {
+    width: 148mm; height: 210mm; padding: 11mm 11mm 9mm;
+    display: flex; flex-direction: column; gap: 5.2mm;
+    page-break-after: always; break-after: page; overflow: hidden;
+  }
+  .page:last-child { page-break-after: auto; break-after: auto; }
+
+  header { display: flex; align-items: center; gap: 4.5mm; border-bottom: 0.8mm solid #1d1d24; padding-bottom: 4mm; }
+  .logo {
+    width: 15mm; height: 15mm; border-radius: 3mm; flex: none; background: #24242b;
+    display: flex; align-items: center; justify-content: center; gap: 1.6mm;
+  }
+  .logo i { width: 4.6mm; height: 4.6mm; border-radius: 50%; background: #d7263d; box-shadow: 0 0 0 0.9mm #3a3a44; }
+  h1 { font-size: 23pt; font-weight: 800; letter-spacing: -0.3pt; line-height: 1; }
+  .sub { font-size: 10.5pt; color: #5b5b66; margin-top: 1.2mm; }
+
+  h2 { font-size: 11pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.9pt; margin-bottom: 2.6mm; }
+  h2 .pg { float: right; font-weight: 600; color: #a0a0aa; letter-spacing: 0; }
+  p, li, td { font-size: 9pt; line-height: 1.38; color: #3a3a44; }
+  b { color: #1d1d24; }
+  .note { font-size: 8pt; color: #7a7a85; margin-top: 1.2mm; line-height: 1.35; }
+
+  .num {
+    flex: none; width: 6.4mm; height: 6.4mm; border-radius: 50%;
+    background: #ffd400; font-weight: 800; font-size: 9.5pt; color: #1d1d24;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 3.2mm; }
+  .ctl { display: flex; gap: 3mm; align-items: flex-start; border: 0.35mm solid #e3e3e8; border-radius: 3mm; padding: 3mm; }
+  .ctl.wide { grid-column: 1 / -1; }
+  .art { flex: none; width: 17mm; display: flex; justify-content: center; align-items: center; height: 15mm; }
+  .knob {
+    width: 13mm; height: 13mm; border-radius: 50%;
+    background: repeating-conic-gradient(#3a3a44 0 6deg, #24242b 6deg 12deg);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .knob::after { content: ""; width: 7mm; height: 7mm; border-radius: 50%; background: #4a4a55; box-shadow: inset 0 0 0 0.5mm #24242b; }
+  .btns { display: flex; gap: 1.6mm; }
+  .btns span {
+    width: 4.6mm; height: 4.6mm; border-radius: 1mm; background: #24242b; color: #fff;
+    font-size: 7pt; font-weight: 800; display: flex; align-items: center; justify-content: center;
+    box-shadow: inset 0 -0.6mm 0 rgba(0,0,0,.35);
+  }
+  .screw {
+    width: 11mm; height: 11mm; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f2f2f5, #a9a9b3 70%, #7d7d88);
+    position: relative;
+  }
+  .screw::before, .screw::after { content: ""; position: absolute; left: 50%; top: 50%; background: #55555f; border-radius: 0.3mm; }
+  .screw::before { width: 6mm; height: 1mm; transform: translate(-50%, -50%); }
+  .screw::after { width: 1mm; height: 6mm; transform: translate(-50%, -50%); }
+  .switch { width: 8mm; height: 12mm; border-radius: 1.5mm; background: #24242b; padding: 1.2mm; display: flex; flex-direction: column; }
+  .switch::before { content: "I"; flex: 1; background: #d7263d; border-radius: 0.8mm 0.8mm 0 0; color: #fff; font-size: 7pt; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .switch::after { content: "O"; flex: 1; background: #3a3a44; border-radius: 0 0 0.8mm 0.8mm; color: #9a9aa5; font-size: 7pt; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .ctl b.t { display: block; font-size: 10pt; margin-bottom: 0.8mm; }
+  .ctl ul { list-style: none; }
+  .ctl li { padding-left: 2.6mm; position: relative; }
+  .ctl li::before { content: ""; position: absolute; left: 0; top: 1.9mm; width: 1.1mm; height: 1.1mm; border-radius: 50%; background: #d7263d; }
+
+  .steps { display: flex; flex-direction: column; gap: 2.4mm; }
+  .step { display: flex; gap: 3mm; align-items: flex-start; }
+
+  /* display mock */
+  .screen {
+    width: 100mm; margin: 0 auto; aspect-ratio: 400 / 240; border-radius: 2.4mm; background: #101018;
+    border: 1.6mm solid #24242b; padding: 2.4mm 3mm; color: #e9e9f0; position: relative;
+    display: grid; grid-template-columns: 1.9fr 1fr; grid-template-rows: auto auto auto 1fr auto; column-gap: 3mm;
+  }
+  .screen .bar { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: 7pt; color: #9a9aa5; }
+  .screen .bat { display: inline-block; width: 6mm; height: 2.4mm; border: 0.3mm solid #9a9aa5; border-radius: 0.5mm; margin-left: 1mm; vertical-align: middle; position: relative; }
+  .screen .bat::after { content: ""; position: absolute; left: 0.3mm; top: 0.3mm; bottom: 0.3mm; width: 65%; background: #1fc95f; border-radius: 0.2mm; }
+  .screen .time { font-size: 25pt; font-weight: 700; line-height: 1.05; }
+  .screen .date { font-size: 7.5pt; color: #b9b9c4; }
+  .screen .wx { grid-row: 2 / 4; grid-column: 2; align-self: center; text-align: left; }
+  .screen .wx div:first-child { font-size: 13pt; font-weight: 700; }
+  .screen .wx div { font-size: 7.5pt; color: #b9b9c4; line-height: 1.3; }
+  .screen .now { grid-column: 1 / -1; font-size: 7.5pt; color: #ffd400; margin-top: 1mm; align-self: end; }
+  .screen .tiles { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.6mm; margin-top: 1.6mm; }
+  .screen .tiles div { background: #2a2a36; border-radius: 1.2mm; font-size: 7.5pt; font-weight: 700; text-align: center; padding: 2.2mm 0; position: relative; }
+  .screen .tiles .num { position: absolute; top: -2.4mm; right: -1.2mm; width: 4.6mm; height: 4.6mm; font-size: 7pt; }
+
+  .pages { display: grid; grid-template-columns: auto 1fr; gap: 1.6mm 3mm; align-items: baseline; }
+  .pages .k { font-size: 9pt; font-weight: 800; white-space: nowrap; }
+
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2.6mm; }
+  .mode { border-radius: 3mm; padding: 3mm; border: 0.5mm solid; }
+  .mode .tag { font-size: 7.5pt; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6pt; }
+  .mode h3 { font-size: 11.5pt; margin: 0.4mm 0 1.4mm; }
+  .mode p { font-size: 8.3pt; line-height: 1.35; }
+  .mode.bt { border-color: #2f7bff; background: #eaf2ff; } .bt .tag { color: #1d5bc9; }
+  .mode.radio { border-color: #e6b400; background: #fff9de; } .radio .tag { color: #9a7700; }
+  .mode.sd { border-color: #1fa855; background: #e9f8ef; } .sd .tag { color: #137a3b; }
+
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 2.1mm 1.2mm; border-bottom: 0.3mm solid #e3e3e8; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  td.sig { width: 24mm; }
+  td.what { font-weight: 700; color: #1d1d24; width: 30mm; }
+  td.msg { font-family: Consolas, "Courier New", monospace; font-size: 8.3pt; color: #1d1d24; font-weight: 700; width: 43mm; }
+  .dots { display: flex; gap: 1.3mm; align-items: center; }
+  .dot { width: 4mm; height: 4mm; border-radius: 50%; }
+  .dot.glow { width: 9mm; border-radius: 2mm; }
+  .dot.gap { background: #e3e3e8 !important; }
+  .red { background: #e5232d; } .green { background: #1fc95f; } .blue { background: #2f7bff; }
+  .orange { background: #ff6a00; } .dimred { background: #f3a3a7; } .off { background: #fff; box-shadow: inset 0 0 0 0.35mm #b9b9c4; }
+  .ell { font-size: 10pt; color: #999; line-height: 1; }
+
+  .box { border-radius: 3mm; padding: 3.2mm 3.6mm; background: #f4f4f7; }
+  .box.warn { background: #fff1e6; border: 0.5mm solid #ff6a00; }
+  .box.warn b.t { color: #b84a00; }
+  .box b.t { display: block; font-size: 10pt; margin-bottom: 1mm; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 3.2mm; }
+
+  footer {
+    margin-top: auto; font-size: 7.8pt; color: #6b6b75;
+    border-top: 0.3mm solid #e3e3e8; padding-top: 2.4mm; line-height: 1.4;
+    display: flex; justify-content: space-between; gap: 4mm;
+  }
+</style>
+</head>
+<body>
+
+<section class="page">
+  <header>
+    <div class="logo"><i></i><i></i></div>
+    <div>
+      <h1>ESP32 Soundbar</h1>
+      <div class="sub">Návod k obsluze bateriového reproduktoru</div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Ovládací prvky</h2>
+    <div class="controls">
+      <div class="ctl">
+        <div class="art"><div class="switch"></div></div>
+        <div>
+          <b class="t">Vypínač</b>
+          <ul>
+            <li><b>I</b> – zapne reproduktor</li>
+            <li><b>O</b> – úplně vypne napájení</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ctl">
+        <div class="art"><div class="knob"></div></div>
+        <div>
+          <b class="t">Otočný knoflík</b>
+          <ul>
+            <li><b>otočit</b> – hlasitost</li>
+            <li><b>stisknout</b> – hrát / pauza</li>
+            <li><b>držet 2 s</b> – uspat</li>
+          </ul>
+        </div>
+      </div>
+      <div class="ctl">
+        <div class="art"><div class="btns"><span>1</span><span>2</span><span>3</span></div></div>
+        <div>
+          <b class="t">Tři tlačítka</b>
+          <ul>
+            <li><b>1</b> – předchozí</li>
+            <li><b>2</b> – hrát / pauza</li>
+            <li><b>3</b> – další</li>
+          </ul>
+          <div class="note">Zleva při pohledu zepředu. Rádio přepíná stanice, SD karta a Bluetooth skladby.</div>
+        </div>
+      </div>
+      <div class="ctl">
+        <div class="art"><div class="screw"></div></div>
+        <div>
+          <b class="t">Dotykový šroub</b>
+          <p>Šroub nahoře na skříni. Dotykem zapnete nebo vypnete podsvícení.</p>
+          <div class="note">V aplikaci jde změnit na zapnutí basů nebo hrát / pauza.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Zapnutí, uspání, vypnutí</h2>
+    <div class="steps">
+      <div class="step"><div class="num">1</div><div><p><b>Zapnutí:</b> přepněte vypínač na <b>I</b>. Podsvícení krátce blikne červeně, zeleně a modře. Reproduktor pokračuje tam, kde skončil: stejný zdroj, stanice nebo skladba i hlasitost.</p></div></div>
+      <div class="step"><div class="num">2</div><div><p><b>Uspání:</b> podržte knoflík 2 sekundy. Zvuk, displej i světla se vypnou. <b>Probudíte</b> ho stiskem knoflíku.</p></div></div>
+      <div class="step"><div class="num">3</div><div><p><b>Samo se uspí</b> po 30 minutách, kdy nic nehraje a nikdo na nic nesáhne. Dobu jde změnit v aplikaci.</p></div></div>
+      <div class="step"><div class="num">4</div><div><p><b>Úplné vypnutí:</b> vypínač na <b>O</b>. Pak ho knoflík neprobudí, zapněte ho znovu vypínačem.</p></div></div>
+    </div>
+  </section>
+
+  <footer><span>ESP32 Soundbar</span><span>1 / 4</span></footer>
+</section>
+
+<section class="page">
+  <section>
+    <h2>Displej</h2>
+    <div class="screen">
+      <div class="bar"><span>Bluetooth</span><span>70 %<span class="bat"></span></span></div>
+      <div class="time">14:05</div>
+      <div class="wx"><div>22,4 °C</div><div>41 %</div><div>1013 hPa</div></div>
+      <div class="date">Saturday 25.10.2026</div>
+      <div class="now">♪ Artist – Song</div>
+      <div class="tiles">
+        <div>Radio<span class="num">1</span></div>
+        <div>SD card<span class="num">2</span></div>
+        <div>Bluetooth<span class="num">3</span></div>
+        <div>Settings<span class="num">4</span></div>
+      </div>
+    </div>
+    <p class="note">Úvodní stránka: hodiny, datum, teplota, vlhkost a tlak, co právě hraje a stav baterie vpravo nahoře. Texty na displeji jsou anglicky.</p>
+  </section>
+
+  <section>
+    <div class="pages">
+      <div class="num">1</div><p><b>Radio</b> – internetové rádio a přehrávač. Tlačítko se seznamem otevře stanice.</p>
+      <div class="num">2</div><p><b>SD card</b> – složky a skladby na kartě. Klepnutím na složku ji otevřete, na skladbu ji pustíte.</p>
+      <div class="num">3</div><p><b>Bluetooth</b> – reproduktor pro telefon a přehrávač s názvem skladby.</p>
+      <div class="num">4</div><p><b>Settings</b> – jas displeje, podsvícení zapnout / vypnout a jeho jas, adresa v síti, verze a napětí baterie.</p>
+    </div>
+    <p class="note">Na přehrávači jsou tlačítka ztlumit, předchozí, hrát / pauza, další, seznam a posuvník hlasitosti. Šipka vlevo nahoře vede zpět domů.</p>
+  </section>
+
+  <section>
+    <h2>Tři zdroje zvuku</h2>
+    <div class="modes">
+      <div class="mode bt">
+        <div class="tag">Bluetooth</div>
+        <h3>Z telefonu</h3>
+        <p>V telefonu vyberte <b>ESP32 Soundbar</b>. Příště se telefon připojí sám. Hlasitost se mění i z telefonu.</p>
+      </div>
+      <div class="mode radio">
+        <div class="tag">Radio</div>
+        <h3>Internetové rádio</h3>
+        <p>Potřebuje WiFi. Stanice přepínáte tlačítky 1 a 3 nebo vyberete ze seznamu.</p>
+      </div>
+      <div class="mode sd">
+        <div class="tag">SD card</div>
+        <h3>Hudba z karty</h3>
+        <p>MP3, AAC a WAV. Po skladbě hraje další ve složce, po zapnutí pokračuje od místa, kde skončila.</p>
+      </div>
+    </div>
+    <p class="note">Mezi Bluetooth a Rádiem / SD kartou se reproduktor <b>restartuje</b> (na displeji „Switching to…“, pár sekund). Mezi Rádiem a SD kartou přepne hned. V režimu Bluetooth je WiFi vypnutá.</p>
+  </section>
+
+  <footer><span>ESP32 Soundbar</span><span>2 / 4</span></footer>
+</section>
+
+<section class="page">
+  <section>
+    <h2>Co znamená podsvícení</h2>
+    <table>
+      <tr>
+        <td class="sig"><div class="dots"><div class="dot red"></div><div class="dot green"></div><div class="dot blue"></div></div></td>
+        <td class="what">Červená, zelená, modrá</td>
+        <td>Reproduktor se právě zapnul.</td>
+      </tr>
+      <tr>
+        <td class="sig"><div class="dots"><div class="dot orange"></div><div class="dot gap"></div><div class="dot orange"></div><span class="ell">…</span></div></td>
+        <td class="what">Bliká oranžově</td>
+        <td>Připojuje se k WiFi nebo hledá novou verzi programu. Chvíli počkejte.</td>
+      </tr>
+      <tr>
+        <td class="sig"><div class="dots"><div class="dot glow red"></div></div></td>
+        <td class="what">Svítí červeně</td>
+        <td>Normální provoz. Barvu, jas a efekt (dýchání, duha, podle hudby, vlna) jde změnit v aplikaci.</td>
+      </tr>
+      <tr>
+        <td class="sig"><div class="dots"><div class="dot glow dimred"></div></div></td>
+        <td class="what">Svítí slaběji</td>
+        <td>V tmavé místnosti se samo ztlumí. Při baterii pod 20 % svítí slaběji kvůli úspoře.</td>
+      </tr>
+      <tr>
+        <td class="sig"><div class="dots"><div class="dot glow off"></div></div></td>
+        <td class="what">Nesvítí</td>
+        <td>Podsvícení je vypnuté (dotykový šroub, nastavení) nebo reproduktor spí.</td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="two">
+    <div class="box">
+      <b class="t">Baterie a nabíjení</b>
+      <p>Nabíjí se kabelem <b>USB-C</b>. Stav baterie je na displeji vpravo nahoře. Pod 10 % se ukáže <b>Battery low!</b>, při úplném vybití se reproduktor sám uspí.</p>
+    </div>
+    <div class="box">
+      <b class="t">Automatické nastavení</b>
+      <p>Jas displeje i podsvícení se řídí světlem v místnosti. Na malou hlasitost reproduktor přidá basy, aby hudba nezněla plochá.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="box warn">
+      <b class="t">Aktualizace programu – nevypínejte</b>
+      <p>V režimu Rádio a SD karta reproduktor sám zjistí, jestli je nová verze. Když ano, na displeji je <b>Firmware update</b> a podsvícení bliká oranžově. Stažení trvá zhruba minutu, potom se sám spustí. <b>Během aktualizace ho nevypínejte.</b></p>
+    </div>
+  </section>
+
+  <footer><span>ESP32 Soundbar</span><span>3 / 4</span></footer>
+</section>
+
+<section class="page">
+  <section>
+    <h2>Hlášky na displeji</h2>
+    <table>
+      <tr><td class="msg">Bluetooth - waiting</td><td>Čeká na telefon. Připojte se v telefonu k ESP32 Soundbar.</td></tr>
+      <tr><td class="msg">Connecting to WiFi...</td><td>Připojuje se k WiFi.</td></tr>
+      <tr><td class="msg">WiFi not connected</td><td>WiFi není v dosahu. Reproduktor to za minutu zkusí znovu sám.</td></tr>
+      <tr><td class="msg">WiFi off (Bluetooth mode)</td><td>V režimu Bluetooth je WiFi vypnutá, to je v pořádku.</td></tr>
+      <tr><td class="msg">Buffering...</td><td>Rádio načítá data. Hrát začne za chvíli.</td></tr>
+      <tr><td class="msg">Stream not available</td><td>Stanice teď nevysílá. Zkuste jinou.</td></tr>
+      <tr><td class="msg">No stations</td><td>Seznam stanic je prázdný. Přidejte je v aplikaci.</td></tr>
+      <tr><td class="msg">No SD card</td><td>Karta chybí nebo ji nejde přečíst.</td></tr>
+      <tr><td class="msg">Muted</td><td>Zvuk je ztlumený. Zrušíte to tlačítkem ztlumit na přehrávači.</td></tr>
+      <tr><td class="msg">Battery low!</td><td>Baterie je skoro vybitá. Připojte nabíječku.</td></tr>
+    </table>
+  </section>
+
+  <section>
+    <h2>Když něco nefunguje</h2>
+    <div class="steps">
+      <div class="step"><div class="num">?</div><div><p><b>Telefon reproduktor nenajde:</b> na displeji zvolte <b>Bluetooth</b> a počkejte na „Bluetooth - waiting“.</p></div></div>
+      <div class="step"><div class="num">?</div><div><p><b>Rádio se nepřipojí k WiFi:</b> síť je nastavená přímo v programu reproduktoru. Při nové WiFi je potřeba program nahrát znovu.</p></div></div>
+      <div class="step"><div class="num">?</div><div><p><b>Nereaguje vůbec:</b> vypínač na <b>O</b>, chvíli počkejte a znovu na <b>I</b>.</p></div></div>
+    </div>
+  </section>
+
+  <footer><span>Ovládání z telefonu: aplikace pro Android na stejné WiFi, v režimu Rádio nebo SD karta.</span><span>4 / 4</span></footer>
+</section>
+
+</body>
+</html>

@@ -25,7 +25,7 @@ modules and the display layout. **The owner speaks Czech – answer in Czech**, 
 | `power.*` | battery curve + smoothing, deep sleep |
 | `sensors.*` | Adafruit BME280 + BH1750 library on `Wire` |
 | `clock.*`, `leds.*` (NeoPixelBus on I2S1), `stations.*`, `sd_card.*` | NTP/time, WS2812B effects + current cap, station list on LittleFS, SD access |
-| `net/network.*` | WiFi in its own task (networks from `secrets.h`, saved by esp-ota-updater), mDNS, update check |
+| `net/network.*` | WiFi in its own task (networks from `secrets.h` via `WifiCredentials.h`, saved by esp-ota-updater), mDNS, update check |
 | `net/api.*` | REST + WebSocket API for the app, SD upload (started once WiFi is connected) |
 | `updater/main.cpp` | separate `updater` environment for the `factory` partition (see *Platform*) |
 - Pin every library to an exact version/tag in `platformio.ini`. Before adding a library, check that it supports the
@@ -228,7 +228,6 @@ NX4024K032 (Enhanced 3.2", 400×240, landscape), project built in Nextion Editor
 
 ### WiFi
 - No credentials in the code, only in the git-ignored `include/secrets.h`. No web page, no captive portal and no WiFi setup from the app (owner decision): WiFi is set only in `secrets.h`. The OTA library (esp-ota-updater) is not changed for this.
-- Re-run the setup from the settings page: hold Button 1 for 5 s while the settings page is open (show a confirmation on the display).
 - Show IP + RSSI in `t_ip`, firmware version + battery voltage in `t_ver`. mDNS `soundbar.local`.
 
 ## Controls
@@ -253,7 +252,7 @@ Status: milestones 1–9 implemented in one go (firmware 0.1.0), not yet tested 
 4. **microSD player**: card stays inside the case, FAT32; files page browser, play MP3 (FLAC optional if RAM allows).
 5. **Home screen data**: NTP clock + date (Europe/Prague, DST), BME280 every 30 s, BH1750 → automatic display `dim` and LED brightness.
 6. **Underglow LEDs** (WS2812B, GPIO14): on/off (`bt_led`), brightness (`h_led`), colour + effects from the app, optional music-reactive (VU), auto-dim with BH1750, limit brightness on low battery, all off in sleep. Keep total current modest (40 LEDs × 60 mA full white = 2.4 A – cap brightness so LEDs + amp stay within the 2.1 A boost).
-7. **Network API for the Android app**: REST + WebSocket (status, play/pause, volume, source, stations CRUD, settings), web upload of files to the SD card, simple web UI for testing, mDNS `soundbar.local`.
+7. **Network API for the Android app**: REST + WebSocket (status, play/pause, volume, source, stations CRUD, settings), upload of files to the SD card, mDNS `soundbar.local`.
 8. **OTA updates** (needs the partition change above).
 9. **Power management**: deep sleep, low-battery handling, auto-off after inactivity, quick resume of last source.
 10. Android app – separate project later; the API from step 7 is its contract.

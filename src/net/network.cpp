@@ -7,13 +7,10 @@
 #include <WiFiClientSecure.h>
 #include <esp_ota_ops.h>
 
-#if __has_include("secrets.h")
-#include "secrets.h"
-#endif
-
 #include "clock.h"
 #include "command.h"
 #include "config.h"
+#include "WifiCredentials.h"
 
 namespace Network {
 
@@ -69,14 +66,7 @@ void checkUpdate() {
 }
 
 bool connectWifi() {
-#if defined(SECRET_SSID_ALT)
-  static const OtaUpdater::WifiNetwork NETWORKS[] = {{SECRET_SSID, SECRET_PASS}, {SECRET_SSID_ALT, SECRET_PASS_ALT}};
-  return OtaUpdater::connectWifi(NETWORKS, 2, Cfg::WIFI_CONNECT_TIMEOUT_MS);
-#elif defined(SECRET_SSID)
-  return OtaUpdater::connectWifi(SECRET_SSID, SECRET_PASS, Cfg::WIFI_CONNECT_TIMEOUT_MS);
-#else
-  return OtaUpdater::connectWifi(nullptr, nullptr, Cfg::WIFI_CONNECT_TIMEOUT_MS);
-#endif
+  return OtaUpdater::connectWifi(WIFI_CREDENTIALS, Cfg::WIFI_CONNECT_TIMEOUT_MS);
 }
 
 void announce() {
